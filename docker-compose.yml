@@ -1,0 +1,64 @@
+version: '3.8'
+networks:
+  vpcbr:
+    driver: bridge
+    ipam:
+     config:
+       - subnet: 10.5.0.0/16
+
+services:
+  vrrp_master:
+    container_name: vrrp_master
+    build:
+      context: ./proxy
+      dockerfile: DFMaster
+    hostname: master
+
+    privileged: true
+    ports:
+      - "80:80"
+    command: apt-get install iptables -y
+    command: iptables -A INPUT -i eth1 -d 224.0.0.0/8 -j ACCEPT
+    command: iptables -A INPUT -p vrrp -i eth1 -j ACCEPT
+
+    command: tail -f /dev/null
+
+    tty: true
+  vrrp_slave:
+    container_name: vrrp_slave
+    build:
+      context: ./proxy
+      dockerfile: DFSlave
+    hostname: slave
+
+    privileged: true
+
+    command: apt-get install iptables -y && apt-get install lynx
+    command: iptables -A INPUT -i eth1 -d 224.0.0.0/8 -j ACCEPT
+    command: iptables -A INPUT -p vrrp -i eth1 -j ACCEPT
+    command: tail -f /dev/null
+    tty: true
+  gateway_main:
+    container_name: gateway_main
+    build:
+      context: ./gateway
+
+    ports:
+      - "3000:3000"
+    networks:
+      vpcbr:
+        ipv4_address: 10.5.0.5
+    working_dir: /app
+    command: node server.js
+  gateway_back:
+    container_name: gateway_back
+    build:
+      context: ./gateway
+
+    ports:
+      - "3001:3001"
+    networks:
+      vpcbr:
+        ipv4_address: 10.5.0.6
+    working_dir: /app
+    command: node server.js
