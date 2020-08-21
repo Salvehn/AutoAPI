@@ -1,64 +1,96 @@
+
 version: '3.8'
-networks:
-  vpcbr:
-    driver: bridge
-    ipam:
-     config:
-       - subnet: 10.5.0.0/16
 
 services:
-  vrrp_master:
-    container_name: vrrp_master
+  balancer:
+    container_name: balancer
     build:
-      context: ./proxy
-      dockerfile: DFMaster
-    hostname: master
-
+      context: ./balancer
+      dockerfile: Dockerfile
+    hostname: balancer
+    networks:
+      micro:
+        ipv4_address: 10.5.50.60
     privileged: true
     ports:
       - "80:80"
-    command: apt-get install iptables -y
-    command: iptables -A INPUT -i eth1 -d 224.0.0.0/8 -j ACCEPT
-    command: iptables -A INPUT -p vrrp -i eth1 -j ACCEPT
 
-    command: tail -f /dev/null
-
+    restart: unless-stopped
     tty: true
-  vrrp_slave:
-    container_name: vrrp_slave
-    build:
-      context: ./proxy
-      dockerfile: DFSlave
-    hostname: slave
-
-    privileged: true
-
-    command: apt-get install iptables -y && apt-get install lynx
-    command: iptables -A INPUT -i eth1 -d 224.0.0.0/8 -j ACCEPT
-    command: iptables -A INPUT -p vrrp -i eth1 -j ACCEPT
-    command: tail -f /dev/null
-    tty: true
-  gateway_main:
-    container_name: gateway_main
-    build:
-      context: ./gateway
-
+    command: ln -s /etc/nginx/sites-available/vhost /etc/nginx/sites-enabled/vhost
+    command: /usr/sbin/nginx -g "daemon off;"
+  sessions:
+    container_name: sessions_storage
+    image: mongo:latest
+    environment:
+      MONGO_INITDB_DATABASE: express_sessions
+      MONGO_INITDB_ROOT_USERNAME: sessions
+      MONGO_INITDB_ROOT_PASSWORD: micro_sessions
     ports:
-      - "3000:3000"
+      - 27017:27017
+    volumes:
+      - mongodb_data_container:/data/db
     networks:
-      vpcbr:
-        ipv4_address: 10.5.0.5
-    working_dir: /app
-    command: node server.js
-  gateway_back:
-    container_name: gateway_back
+      micro:
+        ipv4_address: 10.5.50.70
+    restart: unless-stopped
+    tty: true
+
+
+  gateway_1:
+    container_name: gateway_1
     build:
       context: ./gateway
-
+    networks:
+      micro:
+        ipv4_address: 10.5.50.2
+    working_dir: /app
     ports:
       - "3001:3001"
+    command: node server.js 3001 "users"
+    expose:
+      - "3001"
+      - "8000-8100"
+  
+
+  db_client_users:
+    container_name: db_client_users
+    build:
+      context: ./database
     networks:
-      vpcbr:
-        ipv4_address: 10.5.0.6
+      micro:
+        ipv4_address: 10.5.50.81
     working_dir: /app
-    command: node server.js
+    command: node database.js users 10.5.50.151
+
+    expose:
+      - "8000-8100"
+  db_users:
+    container_name: db_users
+    image: mongo:latest
+    networks:
+      micro:
+        ipv4_address: 10.5.50.151
+    working_dir: /app
+
+    expose:
+      - "8000-8100"
+  
+
+volumes:
+  mongodb_data_container:
+
+
+networks:
+#Internal-only network for proper nginx proxying and ssh
+  micro:
+    driver: bridge
+    ipam:
+     driver: default
+     config:
+       - subnet: 10.5.50.0/16
+
+#External network actually
+  default:
+    driver: bridge
+
