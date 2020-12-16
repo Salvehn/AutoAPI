@@ -56,6 +56,11 @@ module.exports = function(io,dbs) {
         });
     })
 
+    router.post('/:method',async (req,res)=>{
+        let result={}
+        let query=req.body.query
+
+    })
     router.post('/:instance/:method', async (req, res) => {
         console.log('request',req.params)
         if(dbs.includes(req.params.instance)){

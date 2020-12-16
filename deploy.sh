@@ -1,4 +1,6 @@
 #!/bin/bash
+read -p "Balancer port: " port
+echo "Port is set to: $port"
 read -p "Enter gateway count: " gateways
 echo "Gateways amount set to: $gateways"
 read -p "Enter database entities: " dbs
@@ -15,7 +17,7 @@ balancer_conf='\n\
    '$balancer_options'\n\
   }\n\
    server {\n\
-      listen 80;\n\
+      listen '$port';\n\
       location / {\n\
           proxy_pass http://backend;\n\
       }\n\
@@ -34,7 +36,7 @@ RUN apt-get install systemd -y
 RUN touch /etc/nginx/conf.d/load-balancer.conf
 RUN echo '"'"''$balancer_conf''"'"' > /etc/nginx/conf.d/load-balancer.conf
 
-EXPOSE 80
+EXPOSE '$port'
 '
 
 echo "$balancer_run" > ./balancer/Dockerfile
@@ -53,7 +55,7 @@ services:
         ipv4_address: 10.5.50.60
     privileged: true
     ports:
-      - "80:80"
+      - "'$port':'$port'"
 
     restart: unless-stopped
     tty: true
